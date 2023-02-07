@@ -8,6 +8,9 @@ import { JWT_SECRET } from '@app/config';
 import { UserResponseInterface } from './types/userResponseInterface.types';
 import { HttpException } from '@nestjs/common/exceptions';
 import { HttpStatus } from '@nestjs/common/enums';
+import { LoginUserDto } from './dto/loginUsers.dto';
+import { compare } from 'bcrypt';
+import { UpdateUserDto } from './dto/updateUser.dto';
 
 @Injectable()
 export class UsersService {
@@ -33,6 +36,14 @@ export class UsersService {
     Object.assign(newUser, createUserDto);
     return await this.userRepository.save(newUser);
   }
+  async updateUser(
+    userId: number,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserEntity> {
+    const user = await this.findById(userId);
+    Object.assign(user, updateUserDto);
+    return await this.userRepository.save(user);
+  }
 
   generateJwt(user: UserEntity): string {
     return sign(
@@ -43,6 +54,39 @@ export class UsersService {
       },
       JWT_SECRET,
     );
+  }
+  async login(loginUserDto: LoginUserDto): Promise<UserEntity> {
+    const user = await this.userRepository.findOne({
+      where: {
+        email: loginUserDto.email,
+      },
+      select: ['id', 'username', 'email', 'password', 'bio', 'image'],
+    });
+    if (!user) {
+      throw new HttpException(
+        'Credential Not Valid',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const isPasswordCorrect = await compare(
+      loginUserDto.password,
+      user.password,
+    );
+    if (!isPasswordCorrect) {
+      throw new HttpException(
+        'Credential Not Valid',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    delete user.password;
+    return user;
+  }
+  async findById(id: number): Promise<UserEntity> {
+    return this.userRepository.findOne({
+      where: {
+        id,
+      },
+    });
   }
 
   buildResponse(user: UserEntity): UserResponseInterface {
